@@ -102,6 +102,20 @@ class TogglesLayout(Widget):
       icon="speed_limit.png"
     )
 
+    _wt_values = ["30", "90", "180", "300"]
+    _wt_raw = self._params.get("WheeltouchAlertTimeout")
+    _wt_str = _wt_raw.decode() if isinstance(_wt_raw, bytes) else (_wt_raw or "180")
+    _wt_index = _wt_values.index(_wt_str) if _wt_str in _wt_values else 2
+    self._wheeltouch_setting = multiple_button_item(
+      lambda: tr("Hands-Off Alert Timeout"),
+      lambda: tr("Time before steering alert when hands leave the wheel. Increase to probe the car's internal limit."),
+      buttons=[lambda: tr("30s"), lambda: tr("1.5 min"), lambda: tr("3 min"), lambda: tr("5 min")],
+      button_width=215,
+      callback=self._set_wheeltouch_timeout,
+      selected_index=_wt_index,
+      icon="warning.png"
+    )
+
     self._toggles = {}
     self._locked_toggles = set()
     for param, (title, desc, icon, needs_restart) in self._toggle_defs.items():
@@ -131,9 +145,10 @@ class TogglesLayout(Widget):
 
       self._toggles[param] = toggle
 
-      # insert longitudinal personality after NDOG toggle
+      # insert longitudinal personality and wheeltouch timeout after NDOG toggle
       if param == "DisengageOnAccelerator":
         self._toggles["LongitudinalPersonality"] = self._long_personality_setting
+        self._toggles["WheeltouchAlertTimeout"] = self._wheeltouch_setting
 
     self._update_experimental_mode_icon()
     self._scroller = Scroller(list(self._toggles.values()), line_separator=True, spacing=0)
@@ -243,3 +258,7 @@ class TogglesLayout(Widget):
 
   def _set_longitudinal_personality(self, button_index: int):
     self._params.put("LongitudinalPersonality", button_index, block=True)
+
+  def _set_wheeltouch_timeout(self, button_index: int):
+    values = ["30", "90", "180", "300"]
+    self._params.put("WheeltouchAlertTimeout", values[button_index], block=True)
