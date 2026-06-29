@@ -27,7 +27,8 @@ class DRIVER_MONITOR_SETTINGS:
     # https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX:42018X1947&rid=2
     self._WHEELTOUCH_POLICY_ALERT_1_TIMEOUT = 15.
     self._WHEELTOUCH_POLICY_ALERT_2_TIMEOUT = 24.
-    self._WHEELTOUCH_POLICY_ALERT_3_TIMEOUT = 30.
+    _wt = Params().get("WheeltouchAlertTimeout")
+    self._WHEELTOUCH_POLICY_ALERT_3_TIMEOUT = float(_wt) if _wt is not None else 30.
     # https://cdn.euroncap.com/cars/assets/euro_ncap_protocol_safe_driving_driver_engagement_v11_a30e874152.pdf
     self._VISION_POLICY_ALERT_1_TIMEOUT = 3.
     self._VISION_POLICY_ALERT_2_TIMEOUT = 5.
@@ -44,6 +45,7 @@ class DRIVER_MONITOR_SETTINGS:
     self._SG_THRESHOLD = 0.9
     self._BLINK_THRESHOLD = 0.865
     self._PHONE_THRESH = 0.5
+    self._PHONE_GRACE_PERIOD = 30.
     self._POSE_PITCH_THRESHOLD = 0.3133
     self._POSE_PITCH_THRESHOLD_SLACK = 0.3237
     self._POSE_PITCH_THRESHOLD_STRICT = self._POSE_PITCH_THRESHOLD
@@ -154,6 +156,8 @@ class DriverMonitoring:
     self.dcam_uncertain_cnt = 0
     self.dcam_reset_cnt = 0
     self.too_distracted = Params().get_bool("DriverTooDistracted")
+    self._engagement_timer = 0.
+    self._prev_op_engaged = False
 
     self._reset_awareness()
     self._set_policy(MonitoringPolicy.vision)
@@ -227,7 +231,8 @@ class DriverMonitoring:
 
     self.distracted_types['pose'] = bool((pitch_error > pitch_threshold) or (yaw_error > yaw_threshold))
     self.distracted_types['eye'] = bool((self.blink.left + self.blink.right)*0.5 > self.settings._BLINK_THRESHOLD)
-    self.distracted_types['phone'] = bool(self.phone_prob > self.settings._PHONE_THRESH)
+    phone_raw = bool(self.phone_prob > self.settings._PHONE_THRESH)
+    self.distracted_types['phone'] = phone_raw and self._engagement_timer >= self.settings._PHONE_GRACE_PERIOD
 
   def _update_states(self, driver_state, cal_rpy, car_speed, op_engaged, standstill, demo_mode=False, steering_angle_deg=0.):
     rhd_pred = driver_state.wheelOnRightProb
@@ -404,6 +409,14 @@ class DriverMonitoring:
       car_speed = sm['carState'].vEgo
       enabled = sm['selfdriveState'].enabled
       wrong_gear = sm['carState'].gearShifter not in (car.CarState.GearShifter.drive, car.CarState.GearShifter.low)
+
+      if enabled:
+        if not self._prev_op_engaged:
+          self._engagement_timer = 0.
+        self._engagement_timer += DT_DMON
+      else:
+        self._engagement_timer = 0.
+      self._prev_op_engaged = enabled
       standstill = sm['carState'].standstill
       driver_engaged = sm['carState'].steeringPressed or sm['carState'].gasPressed
       brake_disengage_prob = sm['modelV2'].meta.disengagePredictions.brakeDisengageProbs[0] # brake disengage prob in next 2s
