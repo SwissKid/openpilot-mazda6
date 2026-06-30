@@ -1,10 +1,30 @@
 from cereal import log
 
+from openpilot.common.params import Params
 from openpilot.system.ui.widgets.scroller import NavScroller
 from openpilot.selfdrive.ui.mici.widgets.button import BigParamControl, BigMultiParamToggle
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.selfdrive.ui.layouts.settings.common import restart_needed_callback
 from openpilot.selfdrive.ui.ui_state import ui_state
+
+
+class _WheeltouchToggle(BigMultiParamToggle):
+  """BigMultiParamToggle that stores actual seconds values instead of indices."""
+  _VALUES = ["30", "90", "180", "300"]
+
+  def __init__(self):
+    super().__init__("hands-off alert timeout", "WheeltouchAlertTimeout", ["30s", "1.5 min", "3 min", "5 min"])
+
+  def _load_value(self):
+    raw = Params().get("WheeltouchAlertTimeout")
+    val = raw.decode() if isinstance(raw, bytes) else (raw or "180")
+    idx = self._VALUES.index(val) if val in self._VALUES else 2
+    self.set_value(self._options[idx])
+
+  def _handle_mouse_release(self, mouse_pos):
+    super(BigMultiParamToggle, self)._handle_mouse_release(mouse_pos)
+    idx = self._options.index(self.value)
+    Params().put("WheeltouchAlertTimeout", self._VALUES[idx])
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
 
@@ -14,6 +34,7 @@ class TogglesLayoutMici(NavScroller):
     super().__init__()
 
     self._personality_toggle = BigMultiParamToggle("driving personality", "LongitudinalPersonality", ["aggressive", "standard", "relaxed"])
+    self._wheeltouch_toggle = _WheeltouchToggle()
     self._experimental_btn = BigParamControl("experimental mode", "ExperimentalMode")
     is_metric_toggle = BigParamControl("use metric units", "IsMetric")
     ldw_toggle = BigParamControl("lane departure warnings", "IsLdwEnabled")
@@ -24,6 +45,7 @@ class TogglesLayoutMici(NavScroller):
 
     self._scroller.add_widgets([
       self._personality_toggle,
+      self._wheeltouch_toggle,
       self._experimental_btn,
       is_metric_toggle,
       ldw_toggle,
