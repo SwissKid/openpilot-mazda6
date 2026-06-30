@@ -97,9 +97,10 @@ class CarState(CarStateBase):
         self.low_speed_alert = False
     ret.lowSpeedAlert = self.low_speed_alert
 
-    # LKAS_BLOCK ignored intentionally — testing whether EPS still responds to torque
-    # commands when this flag is set. Stock behavior was to soft-disable here.
-    ret.steerFaultTemporary = False
+    # Check if LKAS is disabled due to lack of driver torque when all other states indicate
+    # it should be enabled (steer lockout). Don't warn until we actually get lkas active
+    # and lose it again, i.e, after initial lkas activation
+    ret.steerFaultTemporary = self.lkas_allowed_speed and lkas_blocked
 
     self.acc_active_last = ret.cruiseState.enabled
 
